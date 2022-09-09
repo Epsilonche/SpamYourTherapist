@@ -7,11 +7,76 @@ const cors = require('cors')
 app.use(cors())
 
 const url = 'https://www.therapie.de/therapeutensuche/ergebnisse/?ort=53117&abrechnungsverfahren=7&geschlecht=2&therapieangebot=1'
-const urls = ['https://www.therapie.de/therapeutensuche/ergebnisse/?ort=53117&abrechnungsverfahren=7&geschlecht=2&therapieangebot=1','https://www.therapie.de/therapeutensuche/ergebnisse/?ort=53117&abrechnungsverfahren=7&therapieangebot=1&geschlecht=2&page=2']
-var profileAdresses = []
-var emailAdresses = []
-let promises = []
+
 var totalPages = 1
+
+app.listen(PORT, () => console.log(`server running on PORT ${PORT}`))
+
+app.get('/', function (req, res) {
+    res.json('This is my webscraper')
+})
+
+app.get('/emails',async (req, res) => {
+    var profileAdresses = []
+    profileAdresses = await getProfileAddresses()
+    var emailList = []
+    emailList =await getEmailAdressesFromLinks(profileAdresses)
+    res.send(emailList)
+})
+
+app.get('/profiles',async (req,res)=>{
+    var profileAdresses = []
+    profileAdresses = await getProfileAddresses()
+    res.send(profileAdresses)
+})
+
+async function getProfileAddresses(){
+    var profileAdresses = []
+    for (i = 1; i <= totalPages; i++) {
+    await axios(url+"&page="+i)
+        .then(response => {
+            const html = response.data
+            const $ = cheerio.load(html)
+            const articles = []
+            $('.col-xs-12.no-padding-left-xs.no-padding-right-xs', html).each(function () { //<-- cannot be a function expression
+                //const title = $(this).text()
+                const url = $(this).find('a').attr('href')
+                var adress = "https://www.therapie.de"+url
+                articles.push({
+                    //title,
+                    url,
+                    adress
+                })
+                profileAdresses.push(adress)
+                
+            })
+            //res.json(articles)
+        }).catch(err => console.log(err))
+    }
+    return profileAdresses
+    //Promise.all(promises).then(() => {return "profileAdresses"})
+}
+
+async function getEmailAdressesFromLinks(links){
+    var emailAdresses = []
+    for (i = 0; i < links.length; i++) {
+    await axios(links[i])
+        .then(response => {
+            const html = response.data
+            const $ = cheerio.load(html)
+            const articles = []
+            
+            $('.contact-mail', html).each(function () { //<-- cannot be a function expression
+                const email = $(this).find('button').attr('data-contact-email')
+                emailAdresses.push(decryptString(email,-1))
+            })
+            
+            //res.json(articles)
+        }).catch(err => console.log(err))
+        
+    }
+    return emailAdresses
+}
 
 function decryptCharcode(n, start, end, offset) {
     n = n + offset;
@@ -40,96 +105,3 @@ function decryptString(enc, offset) {
     }
     return dec;
 }
-app.get('/', function (req, res) {
-    res.json('This is my webscraper')
-})
-
-app.get('/results', (req, res) => {
-   /* for (i = 1; i <= totalPages; i++) {
-        promises.push(
-    axios(url+"&page="+i)
-        .then(response => {
-            const html = response.data
-            const $ = cheerio.load(html)
-            const articles = []
-            $('.col-xs-12.no-padding-left-xs.no-padding-right-xs', html).each(function () { //<-- cannot be a function expression
-                //const title = $(this).text()
-                const url = $(this).find('a').attr('href')
-                var adress = "https://www.therapie.de"+url
-                articles.push({
-                    //title,
-                    url,
-                    adress
-                })
-                profileAdresses.push(adress)
-                //console.log(profileAdresses)
-            })
-            
-            //res.json(articles)
-        }).catch(err => console.log(err))
-        )
-    }
-    */
-    /*
-    for (i = 0; i <= profileAdresses.length; i++) {
-        promises.push(
-    axios(profileAdresses[i])
-        .then(response => {
-            const html = response.data
-            const $ = cheerio.load(html)
-            const articles = []
-            
-            $('.contact-mail', html).each(function () { //<-- cannot be a function expression
-                //const title = $(this).text()
-                const email = $(this).find('button').attr('data-contact-email')
-                //var adress = "https://www.therapie.de"+url
-                articles.push({
-                    //title,
-                    //url,
-                    //adress
-                    email
-                })
-                emailAdresses.push(decryptString(email,-1))
-                console.log(decryptString(email,-1))
-            })
-            
-            //res.json(articles)
-        }).catch(err => console.log(err))
-        )
-    }
-    */
-    profileAdresses = getProfileAddresses()
-    Promise.all(promises).then(() => res.json(profileAdresses));
-})
-
-
-app.listen(PORT, () => console.log(`server running on PORT ${PORT}`))
-
-function getProfileAddresses(){
-    for (i = 1; i <= totalPages; i++) {
-        promises.push(
-    axios(url+"&page="+i)
-        .then(response => {
-            const html = response.data
-            const $ = cheerio.load(html)
-            const articles = []
-            $('.col-xs-12.no-padding-left-xs.no-padding-right-xs', html).each(function () { //<-- cannot be a function expression
-                //const title = $(this).text()
-                const url = $(this).find('a').attr('href')
-                var adress = "https://www.therapie.de"+url
-                articles.push({
-                    //title,
-                    url,
-                    adress
-                })
-                profileAdresses.push(adress)
-                //console.log(profileAdresses)
-            })
-            
-            //res.json(articles)
-        }).catch(err => console.log(err))
-        )
-    }
-    return profileAdresses;
-}
-

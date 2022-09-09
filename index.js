@@ -7,8 +7,9 @@ const cors = require('cors')
 app.use(cors())
 
 const url = 'https://www.therapie.de/therapeutensuche/ergebnisse/?ort=53117&abrechnungsverfahren=7&geschlecht=2&therapieangebot=1'
+const baseUrl = 'https://www.therapie.de/therapeutensuche/ergebnisse/?'
+const RESULTS_PER_PAGE = 15
 
-var totalPages = 1
 
 app.listen(PORT, () => console.log(`server running on PORT ${PORT}`))
 
@@ -16,9 +17,27 @@ app.get('/', function (req, res) {
     res.json('This is my webscraper')
 })
 
+app.get('/search', async function(req, res) {
+
+    var filterString = new URLSearchParams(req.query).toString()
+    var profileAdresses = []
+    profileAdresses = await getProfileAddresses(baseUrl+filterString)
+    var emailList = []
+    emailList =await getEmailAdressesFromLinks(profileAdresses)
+    res.send(emailList)
+
+});
+
+app.get('/pages', async function(req, res) {
+    var resultCountString =await getNumberOfResults(url);
+    var pageNum = Math.ceil(resultCountString/RESULTS_PER_PAGE)
+    res.send(""+pageNum)
+});
+
+
 app.get('/emails',async (req, res) => {
     var profileAdresses = []
-    profileAdresses = await getProfileAddresses()
+    profileAdresses = await getProfileAddresses(url)
     var emailList = []
     emailList =await getEmailAdressesFromLinks(profileAdresses)
     res.send(emailList)
@@ -26,11 +45,15 @@ app.get('/emails',async (req, res) => {
 
 app.get('/profiles',async (req,res)=>{
     var profileAdresses = []
-    profileAdresses = await getProfileAddresses()
+    profileAdresses = await getProfileAddresses(url)
     res.send(profileAdresses)
 })
 
-async function getProfileAddresses(){
+async function getProfileAddresses(url){
+    //var totalPages = await getNumberOfPages(url)
+    var totalPages = 2;
+    var numberOfResults = await getNumberOfResults(url)
+    totalPages = Math.ceil(numberOfResults / RESULTS_PER_PAGE)
     var profileAdresses = []
     for (i = 1; i <= totalPages; i++) {
     await axios(url+"&page="+i)
@@ -47,7 +70,8 @@ async function getProfileAddresses(){
                     url,
                     adress
                 })
-                profileAdresses.push(adress)
+                if(adress!="" && adress!=null && adress!="https://www.therapie.deundefined")
+                    profileAdresses.push(adress)
                 
             })
             //res.json(articles)
@@ -77,6 +101,22 @@ async function getEmailAdressesFromLinks(links){
     }
     return emailAdresses
 }
+async function getNumberOfResults(url){
+    var resultCountString
+    await axios(url)
+        .then(response => {
+            const html = response.data
+            const $ = cheerio.load(html)
+            $('.results-label.clearfix', html).each(function () { //<-- cannot be a function expression
+                resultCountString = $(this).find('h2').text()
+            })
+        }).catch(err => console.log(err))
+
+    var resultCountArray = resultCountString.split(' ')
+    var numberOfResults = resultCountArray[0]
+
+    return numberOfResults
+}
 
 function decryptCharcode(n, start, end, offset) {
     n = n + offset;
@@ -104,4 +144,12 @@ function decryptString(enc, offset) {
         }
     }
     return dec;
+}
+serialize = function(obj) {
+    var str = [];
+    for (var p in obj)
+      if (obj.hasOwnProperty(p)) {
+        str.push(encodeURIComponent(p) + "=" + encodeURIComponent(obj[p]));
+      }
+    return str.join("&");
 }
